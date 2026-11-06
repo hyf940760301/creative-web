@@ -32,9 +32,9 @@ vec3 disp(vec3 p){return p*(1.+field(p));}
 void main(){
   vec3 p=position;vec3 n=normalize(p);
   vec3 tg=normalize(cross(n,abs(n.y)<.99?vec3(0.,1.,0.):vec3(1.,0.,0.)));vec3 bt=cross(n,tg);
-  float e=.004;vec3 P=disp(p);
-  vec3 A=disp(normalize(p+tg*e)),B=disp(normalize(p+bt*e)),A2=disp(normalize(p-tg*e)),B2=disp(normalize(p-bt*e));
-  vec3 N=normalize(cross(A-A2,B-B2));if(dot(N,n)<0.)N=-N;
+  float e=.006;vec3 P=disp(p);
+  vec3 A=disp(normalize(p+tg*e)),B=disp(normalize(p+bt*e));
+  vec3 N=normalize(cross(A-P,B-P));if(dot(N,n)<0.)N=-N;
   vD=field(p);
   vec4 w=modelMatrix*vec4(P,1.);vW=w.xyz;vN=normalize(mat3(modelMatrix)*N);vV=normalize(cameraPosition-w.xyz);
   gl_Position=projectionMatrix*viewMatrix*w;
@@ -98,7 +98,7 @@ gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`;
 export const cardFrag = NOISE + /* glsl */`
 uniform sampler2D uMid,uFg;uniform float uT,uHover,uVel,uActive,uReveal,uKind,uAspect;uniform vec2 uUV,uPar;uniform vec3 uC0,uC1,uC2;varying vec2 vUv;
 float h21(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
-float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*snoise(p);p*=2.03;a*=.5;}return s;}
+float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<3;i++){s+=a*snoise(p);p*=2.03;a*=.5;}return s;}
 vec3 ramp(float t){t=clamp(t,0.,1.);return t<.5?mix(uC0,uC1,t*2.):mix(uC1,uC2,t*2.-1.);}
 vec3 visual(vec2 uv,float T){
   vec2 q=vec2((uv.x-.5)*uAspect,uv.y-.5);
@@ -139,7 +139,8 @@ void main(){vec2 uv=vUv;
   float d=distance(vUv,uUV);vec2 dir=normalize(vUv-uUV+1e-4);
   vec2 vuv=.5+(uv-.5)*(.9-.04*uHover)+par*.05+dir*sin(d*38.-uT*7.)*.008*uHover*smoothstep(.5,0.,d);
   float s=.004*uHover+abs(uVel)*.02;
-  vec3 col=vec3(visual(vuv+vec2(s,0.),uT).r,visual(vuv,uT).g,visual(vuv-vec2(s,0.),uT).b);col=min(col*.7,vec3(.5));
+  vec3 col=visual(vuv,uT);
+  if(s>.0015){col.r=visual(vuv+vec2(s,0.),uT).r;col.b=visual(vuv-vec2(s,0.),uT).b;}col=min(col*.7,vec3(.5));
   // live thumbnail strip (bottom-right), each a different time slice
   for(int k=0;k<4;k++){vec2 o=vec2(.68+float(k)*.068,.07),sz=vec2(.058,.085);vec2 lu=(uv-par*.012-o)/sz;
     if(lu.x>0.&&lu.x<1.&&lu.y>0.&&lu.y<1.){col=min(visual(lu,uT*.6+float(k)*7.)*.6,vec3(.5));col+=step(.96,max(lu.x,lu.y))*.4+step(max(lu.x,lu.y),.04)*.0;}}
@@ -165,14 +166,48 @@ void main(){vec2 uv=vUv;
 
 // ---------- Final grade: chromatic aberration, grain, vignette, flash ----------
 export const finalShader = {
-  uniforms: { tDiffuse:{value:null}, uT:{value:0}, uCA:{value:.0025}, uGrain:{value:.022}, uVig:{value:1.}, uFlash:{value:0}, uRes:{value:null} },
+  uniforms: { tDiffuse:{value:null}, uRad:{value:0}, uT:{value:0}, uCA:{value:.0025}, uGrain:{value:.022}, uVig:{value:1.}, uFlash:{value:0}, uRes:{value:null} },
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`uniform sampler2D tDiffuse;uniform float uT,uCA,uGrain,uVig,uFlash;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tDiffuse;uniform float uT,uCA,uGrain,uVig,uFlash,uRad;varying vec2 vUv;
   float h(vec2 p){p=fract(p*vec2(443.897,441.423));p+=dot(p,p.yx+19.19);return fract((p.x+p.y)*p.x);}
   void main(){vec2 c=vUv-.5;float r=dot(c,c);vec2 o=c*r*uCA*14.;
   vec3 col=vec3(texture2D(tDiffuse,vUv+o).r,texture2D(tDiffuse,vUv).g,texture2D(tDiffuse,vUv-o).b);
+  if(uRad>.002){vec3 acc=col;for(int i=1;i<9;i++){float k=1.-float(i)*.018*uRad;vec2 u=.5+c*k;acc+=vec3(texture2D(tDiffuse,u+o*2.).r,texture2D(tDiffuse,u).g,texture2D(tDiffuse,u-o*2.).b);}col=mix(col,acc/9.,clamp(uRad,0.,1.));}
   col*=mix(1.,smoothstep(.9,.05,r*1.7),uVig);col=max(col-.012,0.)*1.012;
   col+=(h(vUv*1000.+fract(uT*7.3))-.5)*uGrain;
   col=mix(col,vec3(1.),uFlash);
   gl_FragColor=vec4(col,1.);}`
 };
+
+// ---------- Detail hero: the card's procedural visual, full-screen ----------
+export const quadVert = /* glsl */`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`;
+export const detailFrag = cardFrag.slice(0, cardFrag.indexOf('void main(){vec2 uv=vUv;')) + /* glsl */`
+uniform float uScroll,uFade;
+void main(){vec2 uv=vUv;uv.y-=uScroll*.18;
+  vec3 col=visual(.5+(uv-.5)*.85+uPar*.02,uT);col=min(col*.72,vec3(.6));
+  col*=1.-.55*pow(length((vUv-.5)*vec2(1.,1.2))*1.25,2.);
+  col*=mix(1.,.35,clamp(uScroll*1.4,0.,1.));
+  gl_FragColor=vec4(col*uFade,1.);}`;
+
+// ---------- Time tunnel: instanced light streaks + motes along a bending tube ----------
+const TUN = /* glsl */`
+uniform float uT,uTravel,uSpeed,uBend,uLen;uniform vec3 uC0,uC1,uC2;
+vec3 tube(vec4 s,out float z){
+  z=2.-mod(s.x*uLen+uTravel,uLen);
+  float ang=s.y*6.28318+z*.035+uT*.2;float r=s.z;
+  vec3 c=vec3(cos(ang)*r,sin(ang)*r,z);
+  c.x+=sin(z*.045+uT*.4)*3.*uBend-sin(uT*.4)*3.*uBend;c.y+=(cos(z*.037)-1.)*2.*uBend;
+  return c;}
+vec3 tint(float w){return w<.33?uC0*1.6+.15:w<.66?uC1:uC2;}`;
+export const streakVert = TUN + /* glsl */`
+attribute vec4 aS;varying vec3 vC;varying float vA;
+void main(){float z;vec3 c=tube(aS,z);
+  vec3 p=c+vec3(position.xy*(1.+uSpeed*.5),position.z*(.4+uSpeed*7.*(.6+aS.w)));
+  vC=tint(fract(aS.w*3.1));vA=smoothstep(-uLen,-uLen*.55,z)*smoothstep(2.,-2.,z);
+  gl_Position=projectionMatrix*viewMatrix*vec4(p,1.);}`;
+export const streakFrag = /* glsl */`varying vec3 vC;varying float vA;void main(){gl_FragColor=vec4(vC*1.4*vA,1.);}`;
+export const moteVert = TUN + /* glsl */`
+uniform float uPR;attribute vec4 aS;varying vec3 vC;varying float vA;
+void main(){float z;vec3 c=tube(aS,z);vec4 mv=viewMatrix*vec4(c,1.);gl_Position=projectionMatrix*mv;
+  gl_PointSize=uPR*(1.+aS.w*2.)*(16./max(-mv.z,1.));vC=mix(vec3(1.),tint(aS.w),.6);vA=smoothstep(-uLen,-uLen*.6,z);}`;
+export const moteFrag = /* glsl */`varying vec3 vC;varying float vA;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(vC*vA*(1.-d*2.),1.);}`;

@@ -69,7 +69,8 @@ function fadeIn(els, delay = 0) { if (CAPTURE || REDUCED) return gsap.set(els, {
 // ------------------------------------------------------------------ renderer
 const canvas = $('#webgl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
-let DPR_MAX = CAPTURE ? 1 : (LOW ? 1.5 : 2), dpr = Math.min(devicePixelRatio || 1, DPR_MAX);
+const BENCH = Q.get('bench') === '1';
+let DPR_MAX = CAPTURE && !BENCH ? 1 : (LOW ? 1.25 : 1.5), dpr = Math.min(devicePixelRatio || 1, DPR_MAX);
 renderer.setPixelRatio(dpr); renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x050508, 1);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
@@ -80,11 +81,11 @@ const COL_A = new THREE.Color('#d4ff3a'), COL_B = new THREE.Color('#7a5cff');
 
 // hero centerpiece
 const blobU = { uT: { value: 0 }, uAmp: { value: .32 }, uFreq: { value: .95 }, uMorph: { value: 0 }, uPulse: { value: 0 }, uMouse: { value: new THREE.Vector3(9, 9, 9) }, uHue: { value: 0 }, uA: { value: COL_A }, uB: { value: COL_B } };
-const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(1, LOW ? 64 : 140), new THREE.ShaderMaterial({ uniforms: blobU, vertexShader: S.blobVert, fragmentShader: S.blobFrag }));
+const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(1, LOW ? 56 : 110), new THREE.ShaderMaterial({ uniforms: blobU, vertexShader: S.blobVert, fragmentShader: S.blobFrag }));
 const hero = new THREE.Group(); hero.add(blob); scene.add(hero);
 // orbit halo
 {
-  const n = LOW ? 1800 : 5000, a = new Float32Array(n), r = new Float32Array(n);
+  const n = LOW ? 1500 : 3500, a = new Float32Array(n), r = new Float32Array(n);
   for (let i = 0; i < n; i++) { a[i] = R() * Math.PI * 2; r[i] = Math.pow(R(), 1.6); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute('aA', new THREE.BufferAttribute(a, 1)); g.setAttribute('aR', new THREE.BufferAttribute(r, 1));
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
@@ -96,7 +97,7 @@ const hero = new THREE.Group(); hero.add(blob); scene.add(hero);
 // dust field
 const dustU = { uT: blobU.uT, uPR: { value: dpr }, uSize: { value: .8 }, uMouse: { value: new THREE.Vector3(99, 99, 99) }, uA: { value: COL_A }, uB: { value: COL_B } };
 {
-  const n = LOW ? 7000 : 26000, p = new Float32Array(n * 3), r = new Float32Array(n);
+  const n = LOW ? 5000 : 15000, p = new Float32Array(n * 3), r = new Float32Array(n);
   for (let i = 0; i < n; i++) { p[i * 3] = (R() - .5) * 46; p[i * 3 + 1] = (R() - .5) * 26; p[i * 3 + 2] = 16 - R() * 62; r[i] = R(); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3)); g.setAttribute('aR', new THREE.BufferAttribute(r, 1));
   scene.add(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: dustU, vertexShader: S.dustVert, fragmentShader: S.dustFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
@@ -155,8 +156,9 @@ function layoutRing(rot) {
 
 // ------------------------------------------------------------------ post
 const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
+const renderPass = new RenderPass(scene, camera); composer.addPass(renderPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .42, .45, .82); composer.addPass(bloom);
+{ const bs = bloom.setSize.bind(bloom); bloom.setSize = (w, h) => bs(Math.max(1, w >> 1), Math.max(1, h >> 1)); }
 const fin = new ShaderPass(S.finalShader); composer.addPass(fin);
 composer.addPass(new OutputPass());
 const fxaa = new ShaderPass(FXAAShader); composer.addPass(fxaa);
@@ -211,8 +213,11 @@ $$('a, button, .mag').forEach(el => { el.addEventListener('pointerenter', () => 
 // magnetic
 if (!TOUCH && !REDUCED) $$('.mag').forEach(b => {
   const inner = b.querySelector('span');
-  b.addEventListener('pointermove', e => { const r = b.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2; gsap.to(b, { x: dx * .32, y: dy * .38, duration: .5, ease: 'power3.out' }); inner && gsap.to(inner, { x: dx * .14, y: dy * .14, duration: .5, ease: 'power3.out' }); });
-  b.addEventListener('pointerleave', () => { gsap.to(b, { x: 0, y: 0, duration: 1, ease: 'elastic.out(1,.35)' }); inner && gsap.to(inner, { x: 0, y: 0, duration: 1, ease: 'elastic.out(1,.35)' }); });
+  const qx = gsap.quickTo(b, 'x', { duration: .5, ease: 'power3.out' }), qy = gsap.quickTo(b, 'y', { duration: .5, ease: 'power3.out' });
+  const ix = inner && gsap.quickTo(inner, 'x', { duration: .5, ease: 'power3.out' }), iy = inner && gsap.quickTo(inner, 'y', { duration: .5, ease: 'power3.out' });
+  let r = null; b.addEventListener('pointerenter', () => { r = b.getBoundingClientRect(); });
+  b.addEventListener('pointermove', e => { r = r || b.getBoundingClientRect(); const dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2; qx(dx * .32); qy(dy * .38); ix && (ix(dx * .14), iy(dy * .14)); });
+  b.addEventListener('pointerleave', () => { r = null; gsap.to(b, { x: 0, y: 0, duration: 1, ease: 'elastic.out(1,.35)' }); inner && gsap.to(inner, { x: 0, y: 0, duration: 1, ease: 'elastic.out(1,.35)' }); });
 });
 
 // ------------------------------------------------------------------ scroll
@@ -238,37 +243,125 @@ function setActive(i, instant) {
   const el = $('.pj-name'); el.textContent = p.title; split(el); if (instant || CAPTURE) gsap.set($$('.c', el), { y: 0, yPercent: 0, rotate: 0 }); else reveal(el, 0, 1);
   sfx('tick');
 }
-$('.work .open').addEventListener('click', () => openDetail(active));
 
-// ------------------------------------------------------------------ detail overlay
-const det = $('#detail'); let detOpen = false, detIdx = 0, detTl = null, capVel = 0;
-function openDetail(i) {
-  detIdx = i; const p = PROJECTS[i]; detOpen = true; lenis && lenis.stop(); sfx('open');
-  $('.d-idx', det).textContent = String(i + 1).padStart(2, '0') + ' / ' + String(N).padStart(2, '0');
-  $('.cover', det).style.backgroundImage = `url(${p.image || covers[i]})`;
-  const h = $('h3', det); h.textContent = p.title; split(h);
-  $('.zh', det).textContent = p.zh + ' · ' + p.tags.join(' / ');
-  $('p.d', det).textContent = p.desc;
-  $('dl', det).innerHTML = `<dt>YEAR 年份</dt><dd>${p.year}</dd><dt>ROLE 角色</dt><dd>${p.role}</dd><dt>CLIENT 客户</dt><dd>Example Client（示例）</dd>`;
-  det.classList.add('is-open'); det.setAttribute('aria-hidden', 'false');
-  const tl = gsap.timeline({ defaults: { ease: 'expo.inOut' } });
-  tl.fromTo($('.bg', det), { clipPath: `circle(0% at ${ptr.x || innerWidth / 2}px ${ptr.y || innerHeight / 2}px)` }, { clipPath: `circle(150% at ${ptr.x || innerWidth / 2}px ${ptr.y || innerHeight / 2}px)`, duration: REDUCED ? .01 : 1.2 })
-    .fromTo($('.cover', det), { clipPath: 'inset(100% 0 0 0)', scale: 1.15 }, { clipPath: 'inset(0% 0 0 0)', scale: 1, duration: 1.3 }, .25)
-    .add(() => reveal(h, 0, 1.2), .5)
-    .fromTo($$('.d-fade', det), { opacity: 0, y: 24 }, { opacity: 1, y: 0, stagger: .07, duration: 1, ease: 'expo.out' }, .6);
-  if (CAPTURE) { tl.pause(); tl.progress(1); detTl = tl; reveal(h); } else gsap.to(fx, { flash: .18, duration: .15, yoyo: true, repeat: 1 });
+// ------------------------------------------------------------------ project page + time tunnel
+const det = $('#detail'), dScroll = $('.d-scroll', det); let detOpen = false, detIdx = 0, capVel = 0;
+const T = { p: 0, idx: 0, tw: null, revealed: false };
+// tunnel scene (preallocated, rendered only while active)
+const tunnelScene = new THREE.Scene(), tunnelCam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .1, 220);
+tunnelScene.background = new THREE.Color(0x030305);
+const tunU = { uT: blobU.uT, uTravel: { value: 0 }, uSpeed: { value: 0 }, uBend: { value: 1 }, uLen: { value: 150 }, uPR: { value: dpr },
+  uC0: { value: new THREE.Color() }, uC1: { value: new THREE.Color() }, uC2: { value: new THREE.Color() } };
+{
+  const NS = LOW ? 700 : 1600, sg = new THREE.InstancedBufferGeometry(); sg.copy(new THREE.BoxGeometry(.035, .035, 1)); sg.instanceCount = NS;
+  const a = new Float32Array(NS * 4); for (let i = 0; i < NS; i++) { a[i * 4] = R(); a[i * 4 + 1] = R(); a[i * 4 + 2] = 1.6 + Math.pow(R(), .7) * 5.5; a[i * 4 + 3] = R(); }
+  sg.setAttribute('aS', new THREE.InstancedBufferAttribute(a, 4));
+  const sm = new THREE.Mesh(sg, new THREE.ShaderMaterial({ uniforms: tunU, vertexShader: S.streakVert, fragmentShader: S.streakFrag, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  sm.frustumCulled = false; tunnelScene.add(sm);
+  const NM = LOW ? 2500 : 6000, mg = new THREE.BufferGeometry(), ma = new Float32Array(NM * 4);
+  for (let i = 0; i < NM; i++) { ma[i * 4] = R(); ma[i * 4 + 1] = R(); ma[i * 4 + 2] = .8 + R() * 7; ma[i * 4 + 3] = R(); }
+  mg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NM * 3), 3)); mg.setAttribute('aS', new THREE.BufferAttribute(ma, 4));
+  const mp = new THREE.Points(mg, new THREE.ShaderMaterial({ uniforms: tunU, vertexShader: S.moteVert, fragmentShader: S.moteFrag, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  mp.frustumCulled = false; tunnelScene.add(mp);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(2.2, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })); core.position.z = -150; tunnelScene.add(core);
 }
-function closeDetail() {
-  if (!detOpen) return; detOpen = false;
-  gsap.timeline({ onComplete: () => { det.classList.remove('is-open'); det.setAttribute('aria-hidden', 'true'); lenis && lenis.start(); } })
-    .to($$('.d-fade', det), { opacity: 0, y: -16, duration: .4, stagger: .03 })
-    .to($('.cover', det), { clipPath: 'inset(0 0 100% 0)', duration: .7, ease: 'expo.in' }, 0)
-    .to($('.bg', det), { clipPath: `circle(0% at 50% 50%)`, duration: .9, ease: 'expo.inOut' }, .2);
-}
-$('.x', det).addEventListener('click', closeDetail);
-$('.nx', det).addEventListener('click', () => { const n = (detIdx + 1) % N; closeDetail(); setTimeout(() => { scrollTo_(workTop + n / (N - 1) * (workEnd - workTop)); lenis && lenis.scrollTo(workTop + n / (N - 1) * (workEnd - workTop), { immediate: true }); openDetail(n); }, 1000); });
-addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+// full-screen project visual for the detail hero
+const detailScene = new THREE.Scene(), quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const detU = { ...cards[0].material.uniforms, uScroll: { value: 0 }, uFade: { value: 1 }, uPar: { value: new THREE.Vector2() }, uAspect: { value: innerWidth / innerHeight }, uHover: { value: 0 }, uActive: { value: 1 }, uReveal: { value: 1 } };
+const detQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: detU, vertexShader: S.quadVert, fragmentShader: S.detailFrag, depthTest: false }));
+detQuad.frustumCulled = false; detailScene.add(detQuad);
+dScroll.addEventListener('scroll', () => { detU.uScroll.value = dScroll.scrollTop / innerHeight; }, { passive: true });
 
+function placeholder(p, seed) {
+  const W = 960, H = 600, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'), r = rng(seed);
+  x.fillStyle = p.colors[0]; x.fillRect(0, 0, W, H);
+  for (let k = 0; k < 5; k++) { const gx = r() * W, gy = r() * H, g = x.createRadialGradient(gx, gy, 0, gx, gy, (.3 + r() * .5) * W); g.addColorStop(0, p.colors[1 + (k & 1)]); g.addColorStop(1, 'rgba(0,0,0,0)'); x.globalAlpha = .6; x.fillStyle = g; x.fillRect(0, 0, W, H); }
+  x.globalAlpha = 1; x.strokeStyle = 'rgba(255,255,255,.18)'; for (let k = 0; k < 9; k++) { x.strokeRect(40 + k * 14, 40 + k * 10, W - 80 - k * 28, H - 80 - k * 20); }
+  x.fillStyle = 'rgba(255,255,255,.7)'; x.font = '500 18px Helvetica, Arial'; x.fillText('IMAGE PLACEHOLDER · 示例图 ' + seed % 100, 48, H - 44);
+  return c.toDataURL('image/jpeg', .82);
+}
+const imgCache = {};
+function fillDetail(i) {
+  detIdx = i; const p = PROJECTS[i], u = cards[i].material.uniforms;
+  detU.uKind.value = u.uKind.value; detU.uC0.value.copy(u.uC0.value); detU.uC1.value.copy(u.uC1.value); detU.uC2.value.copy(u.uC2.value);
+  $('.d-idx', det).textContent = String(i + 1).padStart(2, '0') + ' / ' + String(N).padStart(2, '0') + '  ·  ' + p.year;
+  const h = $('h3', det); h.textContent = p.title; split(h); gsap.set($$('.c', h), { y: 0, yPercent: 105, rotate: 7 });
+  $('.zh', det).textContent = p.zh + '  ·  ' + p.role;
+  $('.d-meta', det).innerHTML = `<dl><dt>YEAR 年份</dt><dd>${p.year}</dd></dl><dl><dt>ROLE 角色</dt><dd>${p.role}</dd></dl><dl><dt>TAGS 标签</dt><dd>${p.tags.map(t => `<span class="chip">${t}</span>`).join('')}</dd></dl><dl><dt>STATS 数据</dt><dd>${(p.stats || []).map(([k, v]) => `<span class="stat"><b>${v}</b>${k}</span>`).join('')}</dd></dl>`;
+  const im = imgCache[i] || (imgCache[i] = [0, 1, 2, 3].map(k => placeholder(p, i * 10 + k + 3)));
+  const sec = p.sections || [['挑战 Challenge', p.desc], ['方案 Approach', '以实时图形为核心，结合声音与交互，构建可在浏览器中流畅运行的体验。（示例内容）'], ['成果 Outcome', '上线后获得良好反馈与多项行业奖项提名。（示例内容）']];
+  $('.d-secs', det).innerHTML = sec.map(([t, d], k) => `<div class="d-sec ${k % 2 ? 'rev' : ''}"><div class="tx"><div class="kick">0${k + 1}</div><h4>${t}</h4><p>${d}</p></div><div class="im ${k === 1 ? 'two' : ''}">${k === 1 ? `<img alt="" src="${im[1]}"><img alt="" src="${im[2]}">` : `<img alt="" src="${im[k ? 3 : 0]}">`}</div></div>`).join('');
+  $('.d-next .t', det).textContent = PROJECTS[(i + 1) % N].title + ' →';
+  dScroll.scrollTop = 0; detU.uScroll.value = 0; T.revealed = false;
+  tunU.uC0.value.copy(u.uC0.value); tunU.uC1.value.copy(u.uC1.value); tunU.uC2.value.copy(u.uC2.value);
+}
+function revealDetail() {
+  if (T.revealed) return; T.revealed = true;
+  const h = $('h3', det);
+  if (CAPTURE || REDUCED) { gsap.set($$('.c', h), { yPercent: 0, rotate: 0 }); gsap.set($$('.d-fade', det), { opacity: 1, y: 0 }); return; }
+  reveal(h, .05, 1.3); gsap.fromTo($$('.d-fade', det), { opacity: 0, y: 24 }, { opacity: 1, y: 0, stagger: .08, duration: 1.1, ease: 'expo.out', delay: .25, overwrite: true });
+}
+const bump = (x, c, a, b) => x < c ? clamp(1 - (c - x) / a) : clamp(1 - (x - c) / b);
+// drive the tunnel progress with an interruptible tween (always continues from the current progress)
+function tweenTunnel(to, dur, ease, done) {
+  T.tw && T.tw.kill();
+  const d = Math.abs(to - T.p) * dur; if (d < .001) { T.p = to; done && done(); return; }
+  T.tw = gsap.to(T, { p: to, duration: d, ease, onComplete: () => { T.tw = null; done && done(); } });
+}
+function openProject(i) {
+  if (T.p > 0 && T.tw) { if (T.idx === i) { tweenTunnel(1, 1.6, 'power2.out'); return; } }
+  T.idx = i; fillDetail(i); detOpen = true; lenis && lenis.stop(); cur.classList.remove('view');
+  if (amb.on) amb.whoosh(1.5);
+  if (REDUCED) { T.p = .9; tweenTunnel(1, 4, 'power1.out'); return; }
+  tweenTunnel(1, 1.65, 'power2.inOut');
+}
+function closeProject() {
+  if (!detOpen && T.p === 0) return;
+  if (amb.on) amb.whoosh(1.2, true);
+  if (REDUCED) { tweenTunnel(.9, 4, 'power1.in', () => { T.p = 0; detOpen = false; lenis && lenis.start(); }); return; }
+  tweenTunnel(0, 1.45, 'power2.inOut', () => { detOpen = false; lenis && lenis.start(); });
+}
+function nextProject() {
+  const n = (detIdx + 1) % N; if (amb.on) amb.whoosh(1.1);
+  tweenTunnel(.62, 1.1, 'power2.in', () => {
+    fillDetail(n); T.idx = n; const y = workTop + n / (N - 1) * (workEnd - workTop); lenis ? lenis.scrollTo(y, { immediate: true, force: true }) : scrollTo_(y); scrollY_ = y;
+    tweenTunnel(1, 1.6, 'power2.out');
+  });
+}
+$('.work .open').addEventListener('click', () => openProject(active));
+canvas.addEventListener('click', () => { if (hoverIdx < 0 || T.p > 0) return; if (hoverIdx === active) openProject(active); else scrollTo(workTop + hoverIdx / (N - 1) * (workEnd - workTop), 1.4); });
+$('.x', det).addEventListener('click', closeProject); $('.d-back', det).addEventListener('click', closeProject);
+$('.d-next', det).addEventListener('click', nextProject);
+addEventListener('keydown', e => { if (e.key === 'Escape') closeProject(); });
+const _cardPos = new THREE.Vector3(), _cardN = new THREE.Vector3(), _diveTo = new THREE.Vector3();
+let detVis = -1, uiVis = 1; const mainEl = $('main'), hdrEl = $('.hdr');
+function tunnelUpdate(dt) {
+  const p = T.p;
+  // phase 1 (0–.26): dive into the card on the main camera
+  if (p > 0 && p < .26) {
+    const e = Math.pow(clamp(p / .26), 2.2), m = cards[T.idx];
+    m.getWorldPosition(_cardPos); _cardN.set(0, 0, 1).applyQuaternion(m.getWorldQuaternion(tmpQ));
+    _diveTo.copy(_cardPos).addScaledVector(_cardN, .35);
+    camera.position.lerp(_diveTo, e); lookS.lerp(_cardPos, e); camera.lookAt(lookS); camera.updateMatrixWorld();
+    m.material.uniforms.uHover.value = Math.max(m.material.uniforms.uHover.value, e);
+  }
+  const fov = p > 0 && p < .26 ? 45 - 13 * smooth(clamp(p / .26)) : 45; if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  // phase 2 (.26–.9): tunnel flight with speed ramp + fov widening
+  const q = clamp((p - .26) / .64), sp = Math.pow(Math.sin(Math.PI * q), .8);
+  tunU.uTravel.value = 170 * (q * q * (3 - 2 * q)) + time * 2; tunU.uSpeed.value = sp;
+  tunnelCam.fov = 52 + 46 * smooth(clamp(q / .8)) - 20 * smooth(clamp((q - .85) / .15)); tunnelCam.updateProjectionMatrix();
+  tunnelCam.rotation.z = Math.sin(time * .5) * .08 + q * .6;
+  fin.uniforms.uRad.value = p > .26 && p < .9 ? .95 * sp : 0;
+  fx.flash = .9 * Math.pow(bump(p, .26, .05, .06), 1.5) + Math.pow(bump(p, .93, .06, .07), 1.3);
+  // phase 3 (.9–1): iris into the project page
+  const dv = clamp((p - .9) / .1);
+  if (dv > 0 !== detVis > 0) det.classList.toggle('is-open', dv > 0);
+  if (Math.abs(dv - detVis) > .001) { det.style.opacity = dv; det.style.clipPath = dv < 1 ? `circle(${(dv * 75).toFixed(2)}% at 50% 50%)` : ''; detVis = dv; det.setAttribute('aria-hidden', dv > 0 ? 'false' : 'true'); }
+  const ui = 1 - smooth(clamp(p / .2)); if (Math.abs(ui - uiVis) > .001) { uiVis = ui; mainEl.style.opacity = hdrEl.style.opacity = ui; mainEl.style.visibility = hdrEl.style.visibility = ui < .01 ? 'hidden' : ''; }
+  detU.uFade.value = dv; detU.uAspect.value = innerWidth / innerHeight; detU.uPar.value.set(ptr.sx * .5, ptr.sy * .5);
+  if (dv > .3) revealDetail();
+}
+const tmpQ = new THREE.Quaternion();
 // ------------------------------------------------------------------ sound
 const amb = new Ambient(); const snd = $('.snd');
 function sfx(k) { amb.on && amb.blip(k); }
@@ -280,10 +373,10 @@ const tick = () => $('.clock').textContent = SITE.contact.city.toUpperCase() + '
 
 // ------------------------------------------------------------------ frame
 const fx = { intro: CAPTURE ? 1 : 0, flash: 0 };
-const ray = new THREE.Raycaster(), plane = new THREE.Plane(), hit = new THREE.Vector3(), tmp = new THREE.Vector3(), lookS = V();
-let time = 0, hoverIdx = -1, lastSec = [];
+const ndc = new THREE.Vector2(), ray = new THREE.Raycaster(), plane = new THREE.Plane(), hit = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), lookS = V(), hitArr = [];
+let time = 0, hoverIdx = -1, lastSec = []; const pbarEl = $('.pbar i'), navEls = $$('.nav a');
 function update(dt) {
-  const k = 1 - Math.exp(-dt * 5.5), kf = 1 - Math.exp(-dt * 9);
+  const k = 1 - Math.exp(-dt * 10), kf = 1 - Math.exp(-dt * 14);
   blobU.uT.value = time;
   ptr.sx += (ptr.nx - ptr.sx) * k; ptr.sy += (ptr.ny - ptr.sy) * k;
   svel += (clamp(vel / 60, -1, 1) - svel) * kf;
@@ -293,7 +386,7 @@ function update(dt) {
   const it = fx.intro, ie = 1 - Math.pow(1 - it, 3);
   camera.position.copy(pose.cam); camera.position.z += (1 - ie) * 9; camera.position.y += (1 - ie) * -1.2;
   const par = REDUCED ? 0 : 1; camera.position.x += ptr.sx * .45 * par; camera.position.y += ptr.sy * .3 * par;
-  lookS.copy(pose.look); camera.lookAt(lookS); camera.rotateZ(-ptr.sx * .015 * par + (1 - ie) * .08);
+  lookS.copy(pose.look); camera.lookAt(lookS); camera.rotateZ(-ptr.sx * .015 * par + (1 - ie) * .08); camera.updateMatrixWorld();
   // hero form
   hero.position.copy(pose.blob); hero.position.y += Math.sin(time * .6) * .08;
   const sc = pose.scale * (it >= 1 ? 1 : (.001 + .999 * gsap.parseEase('elastic.out(1,.6)')(it)));
@@ -302,14 +395,15 @@ function update(dt) {
   halo.rotation.y = time * .05; halo2.rotation.z = .6 + time * .03;
   blobU.uMorph.value = pose.morph; blobU.uHue.value = pose.hue + time * .004; blobU.uAmp.value = lerp(.26, .2, pose.morph) + Math.abs(svel) * .08 + (1 - it) * .35;
   // pointer → world
-  ray.setFromCamera(new THREE.Vector2(ptr.sx, ptr.sy), camera);
+  ray.setFromCamera(ndc.set(ptr.sx, ptr.sy), camera);
   camera.getWorldDirection(tmp); plane.setFromNormalAndCoplanarPoint(tmp, hero.position);
-  if (ptr.active && ray.ray.intersectPlane(plane, hit)) { blobU.uMouse.value.copy(blob.worldToLocal(hit.clone())); dustU.uMouse.value.copy(hit); }
+  if (ptr.active && ray.ray.intersectPlane(plane, hit)) { blobU.uMouse.value.copy(blob.worldToLocal(tmp2.copy(hit))); dustU.uMouse.value.copy(hit); }
   // gallery
-  const rot = galleryRot(s); layoutRing(rot);
-  ring.visible = s > workTop * .25 && s < lerp(workEnd, aboutTop + innerHeight * .3, .55);
-  const gIn = clamp((s - workTop * .45) / (workTop * .55 + 1));
-  const hits = (s > workTop * .7 && s < workEnd + innerHeight * .4 && !detOpen) ? ray.intersectObjects(cards) : [];
+  const rot = galleryRot(s); const inGal = ring.visible = s > workTop * .25 && s < lerp(workEnd, aboutTop + innerHeight * .3, .55);
+  if (inGal) { layoutRing(rot); ring.updateMatrixWorld(true); }
+    const gIn = clamp((s - workTop * .45) / (workTop * .55 + 1));
+  ray.setFromCamera(ndc.set(ptr.nx, ptr.ny), camera);
+  const hits = (inGal && s > workTop * .7 && s < workEnd + innerHeight * .4 && T.p === 0) ? (hitArr.length = 0, ray.intersectObjects(cards, false, hitArr)) : (hitArr.length = 0, hitArr);
   const hIdx = hits.length ? hits[0].object.userData.i : -1;
   if (hIdx !== hoverIdx) { hoverIdx = hIdx; cur.classList.toggle('view', hIdx >= 0); if (hIdx >= 0) sfx('hover'); }
   cards.forEach((m, i) => {
@@ -320,39 +414,47 @@ function update(dt) {
     u.uPar.value.set(lerp(Math.sin(time * .3 + i) * .08, gx, u.uHover.value), lerp(Math.cos(time * .25 + i) * .06, gy, u.uHover.value));
     u.uActive.value = clamp(1 - Math.abs(m.userData.th) / STEP); u.uVel.value = svel;
     u.uReveal.value = clamp(gIn * 1.6 - i * .12);
-    m.visible = u.uReveal.value > 0;
+    m.visible = u.uReveal.value > 0 && Math.abs(m.userData.th) < 1.45;
   });
   const gp = clamp((s - workTop) / Math.max(1, workEnd - workTop));
   if (s > workTop - innerHeight * .5) setActive(Math.round(rot / STEP));
-  $('.pbar i').style.width = (gp * 100) + '%';
+  pbarEl.style.transform = `scaleX(${gp.toFixed(4)})`;
   // nav state
-  const sec = s < workTop - innerHeight * .5 ? 0 : s < workEnd + innerHeight * .3 ? 1 : s < maxS - innerHeight * .6 ? 2 : 3;
-  if (sec !== lastSec) { lastSec = sec; $$('.nav a').forEach(a => a.classList.toggle('on', +a.dataset.s === sec)); }
+  const sec = s < workTop - innerHeight * .5 ? 0 : s < workEnd + innerHeight * .3 ? 1 : s < maxS - innerHeight * .45 ? 2 : 3;
+  if (sec !== lastSec) { lastSec = sec; navEls.forEach(a => a.classList.toggle('on', +a.dataset.s === sec)); }
   // post
   fin.uniforms.uT.value = time; fin.uniforms.uCA.value = .0011 + Math.abs(svel) * .012 + (1 - it) * .02;
-  fin.uniforms.uFlash.value = fx.flash; bloom.strength = .42 + (1 - it) * .8 + fx.flash * 1.5;
+  fin.uniforms.uFlash.value = fx.flash; if (T.p === 0 && detVis <= 0) fin.uniforms.uRad.value = 0; bloom.strength = .42 + (1 - it) * .8 + fx.flash * 1.5;
   // cursor
-  if (!TOUCH && !CAPTURE) { cpos.x += (ptr.x - cpos.x) * kf * 1.4; cpos.y += (ptr.y - cpos.y) * kf * 1.4; dot.style.transform = `translate(${ptr.x}px,${ptr.y}px)`; rng_.style.transform = ''; rng_.style.translate = `${cpos.x}px ${cpos.y}px`; lbl.style.translate = `${cpos.x}px ${cpos.y}px`; }
+  if (!TOUCH && !CAPTURE) { const kc = 1 - Math.exp(-dt * 22); cpos.x += (ptr.x - cpos.x) * kc; cpos.y += (ptr.y - cpos.y) * kc; dot.style.transform = `translate3d(${ptr.x}px,${ptr.y}px,0)`; rng_.style.translate = `${cpos.x}px ${cpos.y}px`; lbl.style.transform = `translate3d(${cpos.x}px,${cpos.y}px,0) translate(-50%,-50%)`; }
   if (amb.on) amb.drive(clamp(s / maxS), Math.abs(svel));
+  if (T.p > 0 || detVis > 0) tunnelUpdate(dt); else if (camera.fov !== 45) { camera.fov = 45; camera.updateProjectionMatrix(); }
 }
-function render() { composer.render(); }
+function render() {
+  const p = T.p, sc = p > .26 && p < .9 ? tunnelScene : p >= .9 ? detailScene : scene, cm = sc === tunnelScene ? tunnelCam : sc === detailScene ? quadCam : camera;
+  renderPass.scene = sc; renderPass.camera = cm; composer.render();
+}
+function warmup() { // precompile every program + run each composer path once so the first click never hitches
+  renderer.compile(scene, camera); renderer.compile(tunnelScene, tunnelCam); renderer.compile(detailScene, quadCam);
+  for (const [sc, cm] of [[tunnelScene, tunnelCam], [detailScene, quadCam], [scene, camera]]) { renderPass.scene = sc; renderPass.camera = cm; composer.render(); }
+}
 
 // adaptive resolution
 let slow = 0;
-function adapt(dt) { if (CAPTURE) return; if (dt > 1 / 40) slow += dt; else slow = Math.max(0, slow - dt * .5); if (slow > 2 && dpr > 1) { dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); setFxaa(); slow = 0; } }
+function adapt(dt) { if (CAPTURE) return; if (dt > 1 / 50) slow += dt; else slow = Math.max(0, slow - dt * .5); if (slow > .6 && dpr > 1) { dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); setFxaa(); slow = 0; } }
 
 let last = performance.now();
-function loop(now) {
-  const dt = Math.min((now - last) / 1000, 1 / 20); last = now; time += dt;
-  lenis && lenis.raf(now); update(dt); render(); adapt(dt); requestAnimationFrame(loop);
+function loop() {
+  const now = performance.now(); const dt = Math.min((now - last) / 1000, 1 / 20); last = now; time += dt;
+  lenis && lenis.raf(now); update(dt); render(); adapt(dt);
 }
 function resize() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); bloom.resolution.set(innerWidth, innerHeight);
-  haloU.uPR.value = dustU.uPR.value = renderer.getPixelRatio(); setFxaa(); layout();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); 
+  tunnelCam.aspect = camera.aspect; tunnelCam.updateProjectionMatrix(); tunU.uPR.value = haloU.uPR.value = dustU.uPR.value = renderer.getPixelRatio(); setFxaa(); layout();
 }
 addEventListener('resize', resize);
-layout();
+layout(); warmup();
 
 // ------------------------------------------------------------------ intro
 function intro() {
@@ -386,14 +488,16 @@ if (CAPTURE) {
     time = t; render(); return time;
   };
   window.__setActive = i => setActive(i, true);
-  window.__openDetail = i => openDetail(i);
+  window.__openDetail = i => { T.idx = i; fillDetail(i); detOpen = true; T.p = 1; };
+  window.__playTunnel = (i, p) => { if (T.idx !== i || !detOpen) { T.idx = i; fillDetail(i); detOpen = true; } T.p = clamp(p); if (T.p === 0) detOpen = false; };
+  window.__detailScroll = y => { dScroll.scrollTop = y; detU.uScroll.value = y / innerHeight; };
   window.__setVelocity = v => { capVel = v; };
   window.__galleryP = i => (workTop + i / (N - 1) * (workEnd - workTop)) / maxS;
   window.__aboutP = () => (aboutTop + innerHeight * .3) / maxS;
   window.__workEndP = () => workEnd / maxS;
-  window.__detail = (i, p) => { if (!detOpen) openDetail(i); detTl.progress(clamp(p)); };
-  window.__closeDetail = () => { detOpen = false; det.classList.remove('is-open'); gsap.set($$('.d-fade', det), { opacity: 0 }); };
+  window.__detail = (i, p) => window.__playTunnel(i, .9 + .1 * p);
+  window.__closeDetail = () => window.__playTunnel(T.idx, 0);
   window.__setTime(0); window.__ready = true;
 } else {
-  requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); intro(); window.__ready = true; });
+  gsap.ticker.lagSmoothing(0); last = performance.now(); gsap.ticker.add(loop); intro(); window.__ready = true;
 }

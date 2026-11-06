@@ -35,3 +35,11 @@ export class Ambient {
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 1);
   }
 }
+Ambient.prototype.whoosh = function (dur = 1.4, rev = false) {
+  const c = this.ctx, t = c.currentTime, n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(rev ? 4200 : 260, t); f.frequency.exponentialRampToValueAtTime(rev ? 260 : 4200, t + dur * .85);
+  const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.16, t + dur * .6); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(this.master); s.start(t); s.stop(t + dur + .05);
+};
