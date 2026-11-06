@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NOVA STUDIO — 光与运动的数字工作室</title>
+<meta name="description" content="NOVA STUDIO — real-time 3D, motion & sound. (示例站点 / example site)">
+<meta name="theme-color" content="#06060a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23d4ff3a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+<script src="./vendor/gsap.min.js"></script>
+<script src="./vendor/lenis.min.js"></script>
+</head>
+<body>
+<div id="loader">
+  <div class="pane t"></div><div class="pane b"></div>
+  <div class="ld"><div class="ld-top"><span class="ld-name">NOVA STUDIO</span><span>LOADING EXPERIENCE · 加载中</span></div><div class="ld-num">0</div></div>
+  <div class="ld-line"></div>
+</div>
+<canvas id="webgl" aria-hidden="true"></canvas>
+<header class="hdr">
+  <a class="logo mag" href="#top"><i></i><span class="site-name">NOVA STUDIO</span></a>
+  <ul class="nav"><li><a href="#top" class="on" data-s="0">首页</a></li><li><a href="#work" data-s="1">作品</a></li><li><a href="#about" data-s="2">关于</a></li><li><a href="#contact" data-s="3">联系</a></li></ul>
+  <div class="hdr-r"><span class="clock">SHANGHAI 00:00</span><button class="snd mag" aria-pressed="false"><span class="bars"><b></b><b></b><b></b><b></b></span><span class="snd-t">声音 OFF</span></button></div>
+</header>
+<main>
+  <section class="hero" id="top">
+    <div class="kick fade">Independent Digital Studio · 示例站点</div>
+    <h1 class="split"><div class="l1"></div><div class="l2"></div><div class="l3"></div></h1>
+    <div class="hero-b"><p class="lead fade"></p><div class="cue fade"><span></span>SCROLL 向下探索</div></div>
+  </section>
+  <section class="work" id="work">
+    <div class="work-ui">
+      <div class="work-top"><div><div class="kick">Selected Work · 精选作品</div></div><div class="work-count"><span class="cnum">01</span><small class="ctot">/ 05</small></div></div>
+      <div class="work-bot">
+        <div><div class="pj-name split"></div><div class="pj-meta"><span>YEAR <b class="pj-year"></b></span><span>ROLE <b class="pj-role"></b></span><span class="pj-tags"></span></div><div class="ex">* EXAMPLE CONTENT · 示例内容</div></div>
+        <button class="open mag pe" type="button"><span>查看项目 VIEW →</span></button>
+      </div>
+      <div class="pbar"><i></i></div>
+    </div>
+  </section>
+  <section class="about" id="about">
+    <div class="about-in">
+      <div class="kick">About · 关于我们</div>
+      <h2 class="stmt split"></h2>
+      <p class="stmt-zh fade"></p>
+      <ul class="svc"></ul>
+      <div class="stats"></div>
+    </div>
+  </section>
+  <section class="contact" id="contact">
+    <div class="kick">Contact · 联系</div>
+    <h2 class="split"><div>一起创造</div><div class="it">something unreal.</div></h2>
+    <a class="btn mag mail" href="#"><span>hello@nova.example ↗</span></a>
+    <div class="foot"><span>© 2026 <span class="site-name">NOVA STUDIO</span> · 示例内容 Example content</span><span class="soc"></span></div>
+  </section>
+</main>
+<div id="detail" aria-hidden="true"><div class="bg"></div>
+  <button class="x mag" aria-label="关闭"><span>✕</span></button>
+  <div class="in"><div class="cover"></div><div class="txt"><div class="kick d-fade">Case Study · 案例 <span class="d-idx"></span></div><h3 class="split"></h3><div class="zh d-fade"></div><p class="d d-fade"></p><dl class="d-fade"></dl><button class="open nx mag d-fade" type="button"><span>下一个 NEXT →</span></button></div></div>
+</div>
+<div class="cur"><div class="ring"></div><div class="dot"></div><div class="lbl">查看 VIEW</div></div>
+<noscript><div class="noscript">需要启用 JavaScript / JavaScript required</div></noscript>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
